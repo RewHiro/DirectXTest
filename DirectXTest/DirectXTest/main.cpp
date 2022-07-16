@@ -38,6 +38,14 @@ LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	return DefWindowProc(hwnd, msg, wparam, lparam); // 既定の処理を粉う
 }
 
+void EnableDebugLayer()
+{
+	ID3D12Debug* debugLayer = nullptr;
+	auto result = D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer));
+	debugLayer->EnableDebugLayer(); // デバッグレイヤーを有効かする
+	debugLayer->Release(); // 有効化したらインターフェイスを解放する
+}
+
 #ifdef _DEBUG
 int main()
 {
@@ -79,10 +87,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	// ウィンドウ表示
 	ShowWindow(hwnd, SW_SHOW);
 
-	IDXGISwapChain4* _swapchain = nullptr;
+#ifdef _DEBUG
+	EnableDebugLayer();
+#endif // _DEBUG
+
 
 	IDXGIFactory6* _dxgiFactory = nullptr;
+#ifdef _DEBUG
+	auto result = CreateDXGIFactory2( DXGI_CREATE_FACTORY_DEBUG, IID_PPV_ARGS(&_dxgiFactory));
+#else
 	auto result = CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));
+#endif // _DEBUG
 
 	// アダプターの列挙用
 	std::vector<IDXGIAdapter*> adapters;
@@ -177,6 +192,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	// ウィンドウ⇔フルスクリーン切り替え可能
 	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
+	IDXGISwapChain4* _swapchain = nullptr;
+
 	result = _dxgiFactory->CreateSwapChainForHwnd
 	(
 		_cmdQueue,
@@ -187,6 +204,88 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 		(IDXGISwapChain1**)&_swapchain
 	);
 
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; // レンダーターゲットビューなのでRTV
+	heapDesc.NodeMask = 0;
+	heapDesc.NumDescriptors = 2; // 表裏の2つ
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // 特に指定なし
+
+	ID3D12DescriptorHeap* rtvHeaps = nullptr;
+	result = _dev->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&rtvHeaps));
+
+	DXGI_SWAP_CHAIN_DESC swcDesc = {};
+	result = _swapchain->GetDesc(&swcDesc);
+
+	std::vector<ID3D12Resource*> _backBuffers(swcDesc.BufferCount);
+	for (int idx = 0; idx < swcDesc.BufferCount; ++idx)
+	{
+		result = _swapchain->GetBuffer(idx, IID_PPV_ARGS(&_backBuffers[idx]));
+		D3D12_CPU_DESCRIPTOR_HANDLE handle = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
+		handle.ptr += idx * _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		_dev->CreateRenderTargetView
+		(
+			_backBuffers[idx],
+			nullptr,
+			handle
+		);
+	}
+
+	auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
+	auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
+	rtvH.ptr += bbIdx * _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+	D3D12_RESOURCE_BARRIER BarrierDesc = {};
+	BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; // 遷移
+	BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE; // 特に指定なし
+	BarrierDesc.Transition.pResource = _backBuffers[bbIdx]; // バックバッファリソース
+	BarrierDesc.Transition.Subresource = 0;
+	BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; // 直前はPRESENT状態
+	BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET; // 今からレンダーターゲット状態
+	_cmdList->ResourceBarrier(1, &BarrierDesc); //　バリア指定実行
+
+
+	_cmdList->OMSetRenderTargets(1, &rtvH, true, nullptr);
+
+	// 画面のクリア
+	std::array<float, 4>clearColor = { 1.0f,1.0f,0.0f,1.0f }; // 黄色
+	_cmdList->ClearRenderTargetView(rtvH, clearColor.data(), 0, nullptr);
+
+	BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+	_cmdList->ResourceBarrier(1, &BarrierDesc);
+
+	// 命令のクローズ
+	_cmdList->Close();
+
+	// コマンドリストの実行
+	ID3D12CommandList* cmdLists[] = { _cmdList };
+	_cmdQueue->ExecuteCommandLists(1, cmdLists);
+
+	ID3D12Fence* _fence = nullptr;
+	UINT64 _fenceVal = 0;
+	result = _dev->CreateFence(_fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));
+
+	_cmdQueue->Signal(_fence, ++_fenceVal);
+
+	if (_fence->GetCompletedValue() != _fenceVal)
+	{
+		// イベントハンドルの取得
+		auto event = CreateEvent(nullptr, false, false, nullptr);
+
+		_fence->SetEventOnCompletion(_fenceVal, event);
+
+		// イベントが発生するまで待ち続ける(INFINITE)
+		WaitForSingleObject(event, INFINITE);
+
+		// イベントハンドルを閉じる
+		CloseHandle(event);
+	}
+
+	_cmdAllocator->Reset(); // キューをクリア
+	_cmdList->Reset(_cmdAllocator, nullptr); // 再びコマンドリストをためる準備
+		
+	// フリップ
+	_swapchain->Present(1, 0);
 
 	MSG msg = {};
 
