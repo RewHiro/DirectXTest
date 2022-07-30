@@ -252,10 +252,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 		);
 	}
 
-	auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
-	auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
-	rtvH.ptr += bbIdx * _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
 	D3D12_RESOURCE_BARRIER BarrierDesc = {};
 
 
@@ -517,15 +513,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	);
 
 
+	float angle = 0.0f;
 
-	DirectX::XMMATRIX matrix = DirectX::XMMatrixRotationY(DirectX::XM_PIDIV4);
+	auto worldMat = DirectX::XMMatrixRotationY(DirectX::XM_PIDIV4);
 
 	DirectX::XMFLOAT3 eye(0, 0, -5);
 	DirectX::XMFLOAT3 target(0, 0, 0);
 	DirectX::XMFLOAT3 up(0, 1, 0);
 
-	matrix *= DirectX::XMMatrixLookAtLH(DirectX::XMLoadFloat3(&eye), DirectX::XMLoadFloat3(&target), DirectX::XMLoadFloat3(&up));
-	matrix *= DirectX::XMMatrixPerspectiveFovLH
+	auto viewMat = DirectX::XMMatrixLookAtLH(DirectX::XMLoadFloat3(&eye), DirectX::XMLoadFloat3(&target), DirectX::XMLoadFloat3(&up));
+	auto projMat = DirectX::XMMatrixPerspectiveFovLH
 	(
 		DirectX::XM_PIDIV2, // 画角は90°
 		static_cast<float>(window_width) / static_cast<float>(window_height), // アスペクト比
@@ -534,19 +531,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	);
 
 
-	//matrix.r[0].m128_f32[0] = 2.0f / window_width;
-	//matrix.r[1].m128_f32[1] = -2.0f / window_height;
-
-	//matrix.r[3].m128_f32[0] = -1.0f;
-	//matrix.r[3].m128_f32[1] = 1.0f;
-
-
-
 	// 定数バッファー作成
 	ID3D12Resource* constBuff = nullptr;
 
 	heapprop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	resdesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(matrix) + 0xff) & ~0xff);
+	resdesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(DirectX::XMMATRIX) + 0xff) & ~0xff);
 
 	_dev->CreateCommittedResource
 	(
@@ -560,7 +549,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 
 	DirectX::XMMATRIX* mapMatrix; // マップ先を示すポインター
 	result = constBuff->Map(0, nullptr, (void**)&mapMatrix); // マップ
-	*mapMatrix = matrix; // 行列の内容をコピー
 
 	// 次の場所に移動
 	basicHeapHandle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -866,84 +854,89 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	scissorrect.right = scissorrect.left + window_width; // 切り抜き右座標
 	scissorrect.bottom = scissorrect.top + window_height; // 切り抜き下座標
 
-
-	BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; // 遷移
-	BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE; // 特に指定なし
-	BarrierDesc.Transition.pResource = _backBuffers[bbIdx]; // バックバッファリソース
-	BarrierDesc.Transition.Subresource = 0;
-	BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; // 直前はPRESENT状態
-	BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET; // 今からレンダーターゲット状態
-	_cmdList->ResourceBarrier(1, &BarrierDesc); //　バリア指定実行
-
-
-	_cmdList->OMSetRenderTargets(1, &rtvH, true, nullptr);
-
-	// 画面のクリア
-	std::array<float, 4>clearColor = { 0.3f,0.3f,0.3f,1.0f };
-	_cmdList->ClearRenderTargetView(rtvH, clearColor.data(), 0, nullptr);
-
-	_cmdList->SetPipelineState(_pipelinestate);
-	_cmdList->SetGraphicsRootSignature(rootsignature);
-	_cmdList->SetDescriptorHeaps(1, &basicDescHeap);
-
-	auto headpHandle = basicDescHeap->GetGPUDescriptorHandleForHeapStart();
-
-	_cmdList->SetGraphicsRootDescriptorTable
-	(
-		0, // ルートパラメーターインデックス
-		headpHandle // ヒープアドレス
-	);
-
-	_cmdList->RSSetViewports(1, &viewport);
-	_cmdList->RSSetScissorRects(1, &scissorrect);
-	_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	_cmdList->IASetVertexBuffers(0, 1, &vbView);
-	_cmdList->IASetIndexBuffer(&ibView);
-	_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
-
-	BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; // 遷移
-	BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE; // 特に指定なし
-	BarrierDesc.Transition.pResource = _backBuffers[bbIdx]; // バックバッファリソース
-	BarrierDesc.Transition.Subresource = 0;
-	BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-	BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-	_cmdList->ResourceBarrier(1, &BarrierDesc);
-
-	// 命令のクローズ
-	_cmdList->Close();
-
-	// コマンドリストの実行
-	//ID3D12CommandList* cmdLists[] = { _cmdList };
-	_cmdQueue->ExecuteCommandLists(1, cmdLists);
-
-	_cmdQueue->Signal(_fence, ++_fenceVal);
-
-	if (_fence->GetCompletedValue() != _fenceVal)
-	{
-		// イベントハンドルの取得
-		auto event = CreateEvent(nullptr, false, false, nullptr);
-
-		_fence->SetEventOnCompletion(_fenceVal, event);
-
-		// イベントが発生するまで待ち続ける(INFINITE)
-		WaitForSingleObject(event, INFINITE);
-
-		// イベントハンドルを閉じる
-		CloseHandle(event);
-	}
-
-	_cmdAllocator->Reset(); // キューをクリア
-	_cmdList->Reset(_cmdAllocator, nullptr); // 再びコマンドリストをためる準備
-		
-	// フリップ
-	_swapchain->Present(1, 0);
-
-
-
 	MSG msg = {};
 
 	while (true)
 	{
+		angle += 0.1f;
+		worldMat = DirectX::XMMatrixRotationY(angle);
+		*mapMatrix = worldMat * viewMat * projMat;
+
+		auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
+		auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
+		rtvH.ptr += bbIdx * _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+		BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; // 遷移
+		BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE; // 特に指定なし
+		BarrierDesc.Transition.pResource = _backBuffers[bbIdx]; // バックバッファリソース
+		BarrierDesc.Transition.Subresource = 0;
+		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; // 直前はPRESENT状態
+		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET; // 今からレンダーターゲット状態
+		_cmdList->ResourceBarrier(1, &BarrierDesc); //　バリア指定実行
+
+
+		_cmdList->OMSetRenderTargets(1, &rtvH, true, nullptr);
+
+		// 画面のクリア
+		std::array<float, 4>clearColor = { 0.3f,0.3f,0.3f,1.0f };
+		_cmdList->ClearRenderTargetView(rtvH, clearColor.data(), 0, nullptr);
+
+		_cmdList->SetPipelineState(_pipelinestate);
+		_cmdList->SetGraphicsRootSignature(rootsignature);
+		_cmdList->SetDescriptorHeaps(1, &basicDescHeap);
+
+		auto headpHandle = basicDescHeap->GetGPUDescriptorHandleForHeapStart();
+
+		_cmdList->SetGraphicsRootDescriptorTable
+		(
+			0, // ルートパラメーターインデックス
+			headpHandle // ヒープアドレス
+		);
+
+		_cmdList->RSSetViewports(1, &viewport);
+		_cmdList->RSSetScissorRects(1, &scissorrect);
+		_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		_cmdList->IASetVertexBuffers(0, 1, &vbView);
+		_cmdList->IASetIndexBuffer(&ibView);
+		_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+
+		BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; // 遷移
+		BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE; // 特に指定なし
+		BarrierDesc.Transition.pResource = _backBuffers[bbIdx]; // バックバッファリソース
+		BarrierDesc.Transition.Subresource = 0;
+		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		_cmdList->ResourceBarrier(1, &BarrierDesc);
+
+		// 命令のクローズ
+		_cmdList->Close();
+
+		// コマンドリストの実行
+		//ID3D12CommandList* cmdLists[] = { _cmdList };
+		_cmdQueue->ExecuteCommandLists(1, cmdLists);
+
+		_cmdQueue->Signal(_fence, ++_fenceVal);
+
+		if (_fence->GetCompletedValue() != _fenceVal)
+		{
+			// イベントハンドルの取得
+			auto event = CreateEvent(nullptr, false, false, nullptr);
+
+			_fence->SetEventOnCompletion(_fenceVal, event);
+
+			// イベントが発生するまで待ち続ける(INFINITE)
+			WaitForSingleObject(event, INFINITE);
+
+			// イベントハンドルを閉じる
+			CloseHandle(event);
+		}
+
+		_cmdAllocator->Reset(); // キューをクリア
+		_cmdList->Reset(_cmdAllocator, nullptr); // 再びコマンドリストをためる準備
+
+		// フリップ
+		_swapchain->Present(1, 0);
+
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&msg);
