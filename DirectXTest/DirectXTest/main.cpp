@@ -536,7 +536,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 
 	char signature[3] = {}; // シグネチャ
 	FILE* fp = nullptr;
-	std::string strModelPath = "Model/巡音ルカ.pmd";
+	std::string strModelPath = "Model/初音ミク.pmd";
 	fopen_s(&fp, strModelPath.c_str(), "rb");
 
 	fread(signature, sizeof(signature), 1, fp);
@@ -600,8 +600,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	{
 		DirectX::XMFLOAT3 diffuse; // ディフューズ色
 		float alpha; // ディフューズα
-		float specularity; // スペキュラの強さ(乗算値)
 		DirectX::XMFLOAT3 specular; // スペキュラ色
+		float specularity; // スペキュラの強さ(乗算値)
 		DirectX::XMFLOAT3 ambient; // アンビエント色
 	};
 
@@ -634,12 +634,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 		sphResources[i] = nullptr;
 		spaResources[i] = nullptr;
 
-		//if (strlen(pmdMaterials[i].texFilePath) == 0)
-		//{
-		//	textureResources[i] = nullptr;
-		//	sphResources[i] = nullptr;
-		//	spaResources[i] = nullptr;
-		//}
+		if (strlen(pmdMaterials[i].texFilePath) == 0)
+		{
+			textureResources[i] = nullptr;
+			sphResources[i] = nullptr;
+			spaResources[i] = nullptr;
+		}
 
 		// モデルとテクスチャパスからアプリケーションからテクスチャパスを得る
 		std::string texFileName = pmdMaterials[i].texFilePath;
@@ -662,7 +662,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 					{
 						sphResources[i] = LoadTextureFromFile(texFilePath, _dev);
 					}
-					else
+					else if(GetExtension(namepair.first) == "spa")
 					{
 						spaResources[i] = LoadTextureFromFile(texFilePath, _dev);
 					}
@@ -680,7 +680,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 					{
 						sphResources[i] = LoadTextureFromFile(texFilePath, _dev);
 					}
-					else
+					else if (GetExtension(namepair.second) == "spa")
 					{
 						spaResources[i] = LoadTextureFromFile(texFilePath, _dev);
 					}
@@ -976,16 +976,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 
 	float angle = 0.0f;
 
-	struct MatricesData
+	struct SceneMatrix
 	{
-		DirectX::XMMATRIX world; // モデル本体を回転させたり移動させたりする行列
-		DirectX::XMMATRIX viewproj; // ビューとプロジェクション合成行列
+		DirectX::XMMATRIX world; // ワールド行列
+		DirectX::XMMATRIX view; // ビュー行列
+		DirectX::XMMATRIX proj; // プロジェクション行列
+		DirectX::XMFLOAT3 eye; // 視点座標
 	};
 
 	auto worldMat = DirectX::XMMatrixRotationY(DirectX::XM_PIDIV4);
 
-	DirectX::XMFLOAT3 eye(0, 10, -15);
-	DirectX::XMFLOAT3 target(0, 10, 0);
+	DirectX::XMFLOAT3 eye(0, 15, -15);
+	DirectX::XMFLOAT3 target(0, 15, 0);
 	DirectX::XMFLOAT3 up(0, 1, 0);
 
 	auto viewMat = DirectX::XMMatrixLookAtLH(DirectX::XMLoadFloat3(&eye), DirectX::XMLoadFloat3(&target), DirectX::XMLoadFloat3(&up));
@@ -1002,7 +1004,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	ID3D12Resource* constBuff = nullptr;
 
 	heapprop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	resdesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(MatricesData) + 0xff) & ~0xff);
+	resdesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(SceneMatrix) + 0xff) & ~0xff);
 
 	_dev->CreateCommittedResource
 	(
@@ -1014,11 +1016,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 		IID_PPV_ARGS(&constBuff)
 	);
 
-	MatricesData* mapMatrix; // マップ先を示すポインター
+	SceneMatrix* mapMatrix; // マップ先を示すポインター
 	result = constBuff->Map(0, nullptr, (void**)&mapMatrix); // マップ
 
 	mapMatrix->world = worldMat;
-	mapMatrix->viewproj = viewMat * projMat;
+	mapMatrix->view = viewMat;
+	mapMatrix->proj = projMat;
+	mapMatrix->eye = eye;
 
 	// 次の場所に移動
 	//basicHeapHandle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -1370,7 +1374,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	descTblRange[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	// テクスチャ1つ目(マテリアルとペア)
-	descTblRange[2].NumDescriptors = 3; // テクスチャ2つ(基本とsphとspa)
+	descTblRange[2].NumDescriptors = 3; // テクスチャ3つ(基本とsphとspa)
 	descTblRange[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // 種別は定数
 	descTblRange[2].BaseShaderRegister = 0; // 0番スロットから
 	descTblRange[2].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
