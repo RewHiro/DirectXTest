@@ -12,6 +12,8 @@
 #include <iostream>
 #endif
 
+#include <map>
+
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -109,19 +111,63 @@ std::wstring GetWideStringFromString(const std::string& str)
 	return wstr;
 }
 
+// ファイル名から拡張子を取得する
+// @param path 対象のパス文字列
+// @return 拡張子
+std::string GetExtension(const std::string& path)
+{
+	int idx = path.rfind('.');
+	return path.substr(idx + 1, path.length() - idx - 1);
+}
+
 ID3D12Resource* LoadTextureFromFile(std::string& texPath, ID3D12Device* _dev)
 {
+
+	// ファイル名パスとリソースのマップテーブル
+	static std::map<std::string, ID3D12Resource*> _resouceTable;
+
+	auto it = _resouceTable.find(texPath);
+	if (it != _resouceTable.end())
+	{
+		// テーブル内にあったらロードするのではなく
+		// マップ内のリソースを返す
+		return it->second;
+	}
+
+	using LoadLamda_t = std::function<HRESULT(const std::wstring& path, DirectX::TexMetadata*, DirectX::ScratchImage&)>;
+	std::map<std::string, LoadLamda_t> loadLambdaTable;
+
+	loadLambdaTable["sph"]
+		= loadLambdaTable["spa"]
+		= loadLambdaTable["bmp"]
+		= loadLambdaTable["png"]
+		= loadLambdaTable["jpg"]
+		= [](const std::wstring& path, DirectX::TexMetadata* meta, DirectX::ScratchImage& img)->HRESULT
+	{
+		return DirectX::LoadFromWICFile(path.c_str(), DirectX::WIC_FLAGS_NONE, meta, img);
+	};
+
+	loadLambdaTable["tga"]
+		= [](const std::wstring& path, DirectX::TexMetadata* meta, DirectX::ScratchImage& img)->HRESULT
+	{
+		return DirectX::LoadFromTGAFile(path.c_str(), meta, img);
+	};
+
+	loadLambdaTable["dds"]
+		= [](const std::wstring& path, DirectX::TexMetadata* meta, DirectX::ScratchImage& img)->HRESULT
+	{
+		return DirectX::LoadFromDDSFile(path.c_str(), DirectX::DDS_FLAGS_NONE, meta, img);
+	};
+
 	//WICテクスチャのロード
 	DirectX::TexMetadata metadata = {};
 	DirectX::ScratchImage scratchImg = {};
 
-	auto result = DirectX::LoadFromWICFile
-	(
-		GetWideStringFromString(texPath).c_str(),
-		DirectX::WIC_FLAGS_NONE,
-		&metadata,
-		scratchImg
-	);
+	auto wtexpath = GetWideStringFromString(texPath); // テクスチャのファイルパス
+
+	auto ext = GetExtension(texPath); // 拡張子を取得
+
+	auto result = loadLambdaTable[ext](wtexpath, &metadata, scratchImg);
 
 	if (FAILED(result))
 	{
@@ -181,6 +227,8 @@ ID3D12Resource* LoadTextureFromFile(std::string& texPath, ID3D12Device* _dev)
 	{
 		return nullptr;
 	}
+
+	_resouceTable[texPath] = texbuff;
 
 	return texbuff;
 }
@@ -284,7 +332,7 @@ ID3D12Resource* CreateBlackTexture(ID3D12Device* _dev)
 	}
 
 	std::vector<unsigned char> data(4 * 4 * 4);
-	std::fill(data.begin(), data.end(), 0); // 全部255で埋める
+	std::fill(data.begin(), data.end(), 0); // 全部0で埋める
 
 	// データ転送
 	result = whiteBuff->WriteToSubresource
@@ -305,14 +353,74 @@ ID3D12Resource* CreateBlackTexture(ID3D12Device* _dev)
 
 }
 
-
-// ファイル名から拡張子を取得する
-// @param path 対象のパス文字列
-// @return 拡張子
-std::string GetExtension(const std::string& path)
+// デフォルトグラデーションテクスチャ
+ID3D12Resource* CreateGrayGradationTexture(ID3D12Device* _dev)
 {
-	int idx = path.rfind('.');
-	return path.substr(idx + 1, path.length() - idx - 1);
+	D3D12_HEAP_PROPERTIES texHeapProp = {};
+	texHeapProp.Type = D3D12_HEAP_TYPE_CUSTOM;
+	texHeapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+
+	texHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	texHeapProp.CreationNodeMask = 0; // 単一アダプタのため0
+	texHeapProp.VisibleNodeMask = 0; // 単一アダプタのため0
+
+	D3D12_RESOURCE_DESC resDesc = {};
+	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	resDesc.Width = 4; // 幅
+	resDesc.Height = 256; // 高さ
+	resDesc.DepthOrArraySize = 1;
+	resDesc.SampleDesc.Count = 1;
+	resDesc.SampleDesc.Quality = 0;
+	resDesc.MipLevels = 1;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	ID3D12Resource* gradBuff = nullptr;
+	auto result = _dev->CreateCommittedResource
+	(
+		&texHeapProp,
+		D3D12_HEAP_FLAG_NONE, // 特に指定なし
+		&resDesc,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+		nullptr,
+		IID_PPV_ARGS(&gradBuff)
+	);
+
+	if (FAILED(result))
+	{
+		return nullptr;
+	}
+
+	// 上が白くて下が黒いテクスチャデータ
+	std::vector<unsigned int> data(4 * 256);
+	auto it = data.begin();
+	unsigned int c = 0xff;
+
+	for (; it != data.end(); it += 4)
+	{
+		auto col = (c << 0xff) | (c << 16) | (c << 8) | c;
+		std::fill(it, it + 4, col);
+		--c;
+	}
+
+	// データ転送
+	result = gradBuff->WriteToSubresource
+	(
+		0,
+		nullptr,
+		data.data(),
+		4 * sizeof(unsigned int),
+		sizeof(unsigned int) * data.size()
+	);
+
+	if (FAILED(result))
+	{
+		return nullptr;
+	}
+
+	return gradBuff;
+
 }
 
 // テクスチャのパスをセパレーター文字で分離する
@@ -624,7 +732,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	std::vector<ID3D12Resource*> textureResources(pmdMaterials.size());
 	std::vector<ID3D12Resource*> sphResources(pmdMaterials.size());
 	std::vector<ID3D12Resource*> spaResources(pmdMaterials.size());
-
+	std::vector<ID3D12Resource*> toonResources(pmdMaterials.size());
 
 	// コピー
 	for (size_t i = 0; i < pmdMaterials.size(); ++i)
@@ -633,13 +741,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 		textureResources[i] = nullptr;
 		sphResources[i] = nullptr;
 		spaResources[i] = nullptr;
+		toonResources[i] = nullptr;
 
 		if (strlen(pmdMaterials[i].texFilePath) == 0)
 		{
 			textureResources[i] = nullptr;
 			sphResources[i] = nullptr;
 			spaResources[i] = nullptr;
+			toonResources[i] = nullptr;
 		}
+
+		// トゥーンリソースの読み込み
+		std::string toonFilePath = "toon/";
+		
+		char toonFileName[16];
+
+		sprintf_s(toonFileName, "toon%02d.bmp", pmdMaterials[i].toonIdx + 1);
+
+		toonFilePath += toonFileName;
+
+		toonResources[i] = LoadTextureFromFile(toonFilePath, _dev);
 
 		// モデルとテクスチャパスからアプリケーションからテクスチャパスを得る
 		std::string texFileName = pmdMaterials[i].texFilePath;
@@ -1145,7 +1266,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	D3D12_DESCRIPTOR_HEAP_DESC matDescHeapDesc = {};
 	matDescHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	matDescHeapDesc.NodeMask = 0;
-	matDescHeapDesc.NumDescriptors = materialNum * 4; // マテリアル数x3
+	matDescHeapDesc.NumDescriptors = materialNum * 5; // マテリアル数x5
 	matDescHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 
 	result = _dev->CreateDescriptorHeap(&matDescHeapDesc, IID_PPV_ARGS(&materialDescHeap));
@@ -1168,6 +1289,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 
 	ID3D12Resource* whiteTex = CreateWhiteTexture(_dev);
 	ID3D12Resource* blackTex = CreateBlackTexture(_dev);
+	ID3D12Resource* gradTex = CreateGrayGradationTexture(_dev);
 
 
 	for (size_t i = 0; i < materialNum; ++i)
@@ -1240,6 +1362,29 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 			_dev->CreateShaderResourceView
 			(
 				spaResources[i],
+				&srvDesc,
+				matDescHeapH
+			);
+		}
+
+		matDescHeapH.ptr += inc;
+
+		if (toonResources[i] == nullptr)
+		{
+			srvDesc.Format = blackTex->GetDesc().Format;
+			_dev->CreateShaderResourceView
+			(
+				gradTex,
+				&srvDesc,
+				matDescHeapH
+			);
+		}
+		else
+		{
+			srvDesc.Format = toonResources[i]->GetDesc().Format;
+			_dev->CreateShaderResourceView
+			(
+				toonResources[i],
 				&srvDesc,
 				matDescHeapH
 			);
@@ -1351,16 +1496,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 		},
 	};
 
-	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
-	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 横方向の繰り返し
-	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 縦方向の繰り返し
-	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 奥行きの繰り返し
-	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK; // ボーダーは黒
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; // 線形補間
-	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX; // ミップマップ最大値
-	samplerDesc.MinLOD = 0.0f;// ミップマップ最小値
-	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーから見える
-	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // リサンプリングしない
+	D3D12_STATIC_SAMPLER_DESC samplerDesc[2] = {};
+	samplerDesc[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 横方向の繰り返し
+	samplerDesc[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 縦方向の繰り返し
+	samplerDesc[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 奥行きの繰り返し
+	samplerDesc[0].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK; // ボーダーは黒
+	samplerDesc[0].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT; // 補間しない(ニアレストネイバー)
+	samplerDesc[0].MaxLOD = D3D12_FLOAT32_MAX; // ミップマップ最大値
+	samplerDesc[0].MinLOD = 0.0f;// ミップマップ最小値
+	samplerDesc[0].ShaderRegister = 0; // シェーダースロット番号を忘れないように
+	samplerDesc[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // ピクセルシェーダーから見える
+	samplerDesc[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // リサンプリングしない
+
+	samplerDesc[1] = samplerDesc[0]; // 変更点以外をコピー
+	samplerDesc[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // 繰り返さない
+	samplerDesc[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // 繰り返さない
+	samplerDesc[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; // 繰り返さない
+	samplerDesc[1].ShaderRegister = 1; // シェーダースロット番号を忘れないように
 
 	D3D12_DESCRIPTOR_RANGE descTblRange[3] = {};
 	descTblRange[0].NumDescriptors = 1; // 定数1つ
@@ -1374,7 +1526,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	descTblRange[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	// テクスチャ1つ目(マテリアルとペア)
-	descTblRange[2].NumDescriptors = 3; // テクスチャ3つ(基本とsphとspa)
+	descTblRange[2].NumDescriptors = 4; // テクスチャ3つ(基本とsphとspaとトゥーン)
 	descTblRange[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // 種別は定数
 	descTblRange[2].BaseShaderRegister = 0; // 0番スロットから
 	descTblRange[2].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
@@ -1460,8 +1612,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 	rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 	rootSignatureDesc.pParameters = rootparam; // ルートパラメーターの先頭アドレス
 	rootSignatureDesc.NumParameters = 2; // ルートパラメーター数
-	rootSignatureDesc.pStaticSamplers = &samplerDesc;
-	rootSignatureDesc.NumStaticSamplers = 1;
+	rootSignatureDesc.pStaticSamplers = samplerDesc;
+	rootSignatureDesc.NumStaticSamplers = 2;
 
 	ID3DBlob* rootSigBlob = nullptr;
 	
@@ -1601,7 +1753,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSRT, int)
 
 		auto materialH = materialDescHeap->GetGPUDescriptorHandleForHeapStart(); // ヒープ先頭
 		unsigned int idxOffset = 0; // 最初はオフセットなし
-		auto cbvsrvIncSize = _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * 4;
+		auto cbvsrvIncSize = _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * 5;
 
 		for (auto& m : materials)
 		{
