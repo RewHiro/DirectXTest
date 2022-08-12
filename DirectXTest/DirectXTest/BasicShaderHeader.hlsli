@@ -18,17 +18,21 @@ Texture2D<float4> sph : register(t1); // 1番スロットに設定されたテクスチャ
 Texture2D<float4> spa : register(t2); // 2番スロットに設定されたテクスチャ
 Texture2D<float4> toon : register(t3); // 3番スロットに設定されたテクスチャ(トゥーン)
 
-cbuffer cbuff0 : register(b0) // 定数バッファー
+cbuffer SceneData : register(b0) // 定数バッファー
 {
-	matrix world; // ワールド変換行列
 	matrix view; // ビュー行列
 	matrix proj; // プロジェクション行列
 	float3 eye; // 視点
 };
 
+cbuffer Transform : register(b1) // 定数バッファー
+{
+	matrix world; // ワールド変換行列
+};
+
 // 定数バッファー
 // マテリアル用
-cbuffer Material : register(b1)
+cbuffer Material : register(b2)
 {
 	float4 diffuse; // ディフューズ色
 	float4 specular; // スペキュラ
