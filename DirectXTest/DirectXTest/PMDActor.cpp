@@ -711,7 +711,7 @@ float PMDActor::GetYFromXOnBezier(float x, XMFLOAT2& a, XMFLOAT2& b, uint8_t n)
 
 	float t = x;
 	const float k0 = 1 + 3 * a.x - 3 * b.x; // t^3‚ÌŒW”
-	const float k1 = 3 + b.x - 6 * a.x; // t^2‚ÌŒW”
+	const float k1 = 3 * b.x - 6 * a.x; // t^2‚ÌŒW”
 	const float k2 = 3 * a.x; // t‚ÌŒW”
 
 	// Œë·‚Ì”ÍˆÍ“à‚©‚Ç‚¤‚©‚Ég—p‚·‚é’è”
