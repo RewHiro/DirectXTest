@@ -5,6 +5,8 @@
 #include <vector>
 #include <string>
 #include <wrl.h>
+#include <map>
+#include <unordered_map>
 
 class Dx12Wrapper;
 class PMDRenderer;
@@ -60,8 +62,32 @@ class PMDActor
 		DirectX::XMMATRIX world;
 	};
 
+	struct BoneNode
+	{
+		int boneIdx; // ボーンインデックス
+		DirectX::XMFLOAT3 startPos; // ボーン基準点(回転の中心)
+		DirectX::XMFLOAT3 endPos; // ボーン先端点(実際のスキニングには利用しない)
+		std::vector<BoneNode*> children; // 子ノード
+	};
+
+	// モーション構造体
+	struct KeyFrame
+	{
+		unsigned int frameNo; // アニメーション開始からのフレーム数
+		DirectX::XMVECTOR quaternion; // クォータニオン
+		DirectX::XMFLOAT2 p1, p2; // ベジェ曲線の中間コントロールポイント
+
+		KeyFrame(unsigned int fno, const DirectX::XMVECTOR& q, const DirectX::XMFLOAT2& ip1, const DirectX::XMFLOAT2& ip2)
+			: frameNo(fno)
+			, quaternion(q) 
+			, p1(ip1)
+			, p2(ip2)
+		{}
+	};
+
 	Transform _transform;
 	Transform* _mappedTransform = nullptr;
+	DirectX::XMMATRIX* _mappedMatrices = nullptr;
 	ComPtr<ID3D12Resource> _transformBuff = nullptr;
 
 	// マテリアル関連
@@ -71,6 +97,10 @@ class PMDActor
 	std::vector<ComPtr<ID3D12Resource>> _sphResources;
 	std::vector<ComPtr<ID3D12Resource>> _spaResources;
 	std::vector<ComPtr<ID3D12Resource>> _toonResources;
+
+	std::vector<DirectX::XMMATRIX> _boneMatrices;
+	std::map<std::string, BoneNode> _boneNodeTable;
+	std::unordered_map<std::string, std::vector<KeyFrame>> _motiondata;
 
 	// 読み込んだマテリアルをもとにマテリアルバッファを作成
 	HRESULT CreateMaterialData();
@@ -85,14 +115,26 @@ class PMDActor
 	// PMDファイルのロード
 	HRESULT LoadPMDFile(const char* path);
 
+	// VMDファイルのロード
+	HRESULT LoadVMDFile(const char* path);
+
+	void RecursiveMatrixMultiply(BoneNode* node, const DirectX::XMMATRIX& mat);
+
+	void MotionUpdate();
+
+	float GetYFromXOnBezier(float x, DirectX::XMFLOAT2& a, DirectX::XMFLOAT2& b, uint8_t n);
+
 	float _angle; // テスト用Y軸回転
+	DWORD _startTime; // アニメーション開始時のミリ秒
+	DWORD _duration;
 
 public:
-	PMDActor(const char* filepath, PMDRenderer& renderer);
+	PMDActor(const char* filepath, const char* vmdFilePath, PMDRenderer& renderer);
 	~PMDActor();
 
 	// クローンは頂点およびマテリアルは共通のバッファを見るようにする
 	PMDActor* Clone();
 	void Update();
 	void Draw();
+	void PlayAnimation();
 };

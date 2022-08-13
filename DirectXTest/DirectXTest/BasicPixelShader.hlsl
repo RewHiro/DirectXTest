@@ -31,7 +31,7 @@ float4 BasicPS(Output input) : SV_TARGET
 		* sph.Sample(smp, sphereMapUV) // スフィアマップ(乗算)
 		+ spa.Sample(smp, sphereMapUV) * texColor // スフィアマップ(加算)
 		+ float4(specularB * specular.rgb, 1) // スペキュラ
-		, float4(ambient * texColor, 1)); // アンビエント
+		, float4(ambient * texColor.rgb, 1)); // アンビエント
 
 	//return float4(brightness, brightness, brightness, 1) // 輝度
 	//	* diffuse  // ディフューズ色

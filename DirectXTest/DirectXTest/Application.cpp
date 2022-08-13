@@ -67,7 +67,7 @@ bool Application::Init()
 	// DirectX12ラッパー生成&初期化
 	_dx12.reset(new Dx12Wrapper(_hwnd));
 	_pmdRenderer.reset(new PMDRenderer(*_dx12));
-	_pmdActor.reset(new PMDActor("Model/初音ミク.pmd", *_pmdRenderer));
+	_pmdActor.reset(new PMDActor("Model/初音ミク.pmd", "Motion/swing.vmd", *_pmdRenderer));
 
 	return true;
 }
@@ -78,6 +78,9 @@ void Application::Run()
 	float angle = 0.0f;
 	MSG msg = {};
 	unsigned int frame = 0;
+
+	_pmdActor->PlayAnimation();
+
 	while (true)
 	{
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
