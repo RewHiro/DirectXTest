@@ -389,8 +389,8 @@ HRESULT Dx12Wrapper::CreateSceneView()
 	_mappedSceneData = nullptr; // マップ先を示すポインタ
 	result = _sceneConstBuff->Map(0, nullptr, (void**)&_mappedSceneData); // マップ
 
-	DirectX::XMFLOAT3 eye(0, 15, -15);
-	DirectX::XMFLOAT3 target(0, 15, 0);
+	DirectX::XMFLOAT3 eye(0, 10, -15);
+	DirectX::XMFLOAT3 target(0, 10, 0);
 	DirectX::XMFLOAT3 up(0, 1, 0);
 
 	_mappedSceneData->view = DirectX::XMMatrixLookAtLH(DirectX::XMLoadFloat3(&eye), DirectX::XMLoadFloat3(&target), DirectX::XMLoadFloat3(&up));
