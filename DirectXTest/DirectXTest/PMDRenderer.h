@@ -40,6 +40,7 @@ public:
 	PMDRenderer(Dx12Wrapper& dx12);
 	~PMDRenderer();
 	void Update();
+	void BeforeDraw();
 	void Draw();
 	ID3D12PipelineState* GetPipelineState();
 	ID3D12RootSignature* GetRootSignature();

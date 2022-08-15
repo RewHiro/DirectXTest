@@ -301,8 +301,17 @@ void PMDRenderer::Update()
 {
 }
 
+void PMDRenderer::BeforeDraw()
+{
+	auto cmdlist = _dx12.CommandList();
+	cmdlist->SetPipelineState(_pipeline.Get());
+	cmdlist->SetGraphicsRootSignature(_rootSignature.Get());
+	cmdlist->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+}
+
 void PMDRenderer::Draw()
 {
+
 }
 
 ID3D12PipelineState* PMDRenderer::GetPipelineState()

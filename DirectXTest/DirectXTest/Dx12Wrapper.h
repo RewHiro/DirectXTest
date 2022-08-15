@@ -33,6 +33,23 @@ class Dx12Wrapper
 	std::unique_ptr<D3D12_VIEWPORT> _viewport; // ビューポート
 	std::unique_ptr<D3D12_RECT> _scissorrect; // シザー矩形
 
+	ComPtr<ID3D12Resource> _peraResource;
+	ComPtr<ID3D12DescriptorHeap> _peraRTVHeap; // レンダーターゲット用
+	ComPtr<ID3D12DescriptorHeap> _peraSRVHeap; // テクスチャ用
+	ComPtr<ID3D12Resource> _peraVB;
+	D3D12_VERTEX_BUFFER_VIEW _peraVBV;
+	ComPtr<ID3D12PipelineState> _pipeline = nullptr; // パイプライン
+	ComPtr<ID3D12RootSignature> _rootSignature = nullptr; // ルートシグネチャ
+	ComPtr<ID3D12DescriptorHeap> _peraRegisterHeap;
+
+	ComPtr<ID3D12Resource> _bokehParamBuffer;
+	ComPtr<ID3D12Resource> _peraResource2;
+	ComPtr<ID3D12PipelineState> _pipeline2 = nullptr; // パイプライン
+
+	// 歪みテクスチャ用
+	ComPtr<ID3D12DescriptorHeap> _effectSRVHeap;
+	ComPtr<ID3D12Resource> _effectTexBuffer;
+
 	// シーンを構成するバッファまわり
 	ComPtr<ID3D12Resource> _sceneConstBuff = nullptr;
 
@@ -66,6 +83,10 @@ class Dx12Wrapper
 	// ビュープロジェクションビューの生成
 	HRESULT CreateSceneView();
 
+	HRESULT CreatePeraResource();
+
+	HRESULT CreateBokeResource();
+
 	// ロード用テーブル
 	using LoadLamda_t = std::function<HRESULT(const std::wstring& path, DirectX::TexMetadata*, DirectX::ScratchImage&)>;
 	std::map<std::string, LoadLamda_t> _loadLambdaTable;
@@ -76,11 +97,27 @@ class Dx12Wrapper
 	// テクスチャ名からテクスチャバッファ作成、中身をコピー
 	ID3D12Resource* CreateTextureFromFile(const char* texpath);
 
+	bool CheckShaderCompileResult(HRESULT result, ID3DBlob* error = nullptr);
+
+	std::vector<float> GetGaussianWeights(size_t count, float s);
+
+	bool CreateeffectBufferAndView();
+
 public:
 	Dx12Wrapper(HWND hwnd);
 	~Dx12Wrapper();
 
 	void Update();
+
+	void PreDrawToPera1();
+	void DrawToPera1();
+	void PostDrawToPera1();
+
+	void Clear();
+	void Draw();
+	void Flip();
+	void DrawHorizontalBokeh();
+
 	void BeginDraw();
 	void EndDraw();
 

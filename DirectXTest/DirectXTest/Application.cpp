@@ -95,26 +95,41 @@ void Application::Run()
 			break;
 		}
 
-		// 全体の描画準備
-		_dx12->BeginDraw();
-
-		// PMD用の描画パイプラインに合わせる
-		_dx12->CommandList()->SetPipelineState(_pmdRenderer->GetPipelineState());
-
-		// ルートシグネチャもPMD用に合わせる
-		_dx12->CommandList()->SetGraphicsRootSignature(_pmdRenderer->GetRootSignature());
-
-		_dx12->CommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		_dx12->SetScene();
-
 		_pmdActor->Update();
+
+		_dx12->PreDrawToPera1();
+		_pmdRenderer->BeforeDraw();
+		_dx12->DrawToPera1();
 		_pmdActor->Draw();
+		//_pmdRenderer->Draw();
+		_dx12->PostDrawToPera1();
 
-		_dx12->EndDraw();
+		//_dx12->DrawHorizontalBokeh();
 
-		// フリップ
-		_dx12->Swapchain()->Present(1, 0);
+		_dx12->Clear();
+		_dx12->Draw();
+		_dx12->Flip();
+
+		// 全体の描画準備
+		//_dx12->BeginDraw();
+
+		//// PMD用の描画パイプラインに合わせる
+		//_dx12->CommandList()->SetPipelineState(_pmdRenderer->GetPipelineState());
+
+		//// ルートシグネチャもPMD用に合わせる
+		//_dx12->CommandList()->SetGraphicsRootSignature(_pmdRenderer->GetRootSignature());
+
+		//_dx12->CommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		//_dx12->SetScene();
+
+		//_pmdActor->Update();
+		//_pmdActor->Draw();
+
+		//_dx12->EndDraw();
+
+		//// フリップ
+		//_dx12->Swapchain()->Present(1, 0);
 
 	}
 }
