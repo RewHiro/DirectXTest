@@ -17,6 +17,7 @@ class PMDRenderer
 
 	ComPtr<ID3D12PipelineState> _pipeline = nullptr; // PMD用パイプライン
 	ComPtr<ID3D12RootSignature> _rootSignature = nullptr; // PMD用ルートシグネチャ
+	ComPtr<ID3D12PipelineState> _plsShadow = nullptr;
 
 	// PMD用共通テクスチャ(白、黒、グレイスケールグラデーション)
 	ComPtr<ID3D12Resource> _whiteTex = nullptr;
@@ -42,6 +43,8 @@ public:
 	void Update();
 	void BeforeDraw();
 	void Draw();
+	void SetupRootSignature();
+	void SetupShadowPass();
 	ID3D12PipelineState* GetPipelineState();
 	ID3D12RootSignature* GetRootSignature();
 

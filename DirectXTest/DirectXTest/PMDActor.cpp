@@ -364,10 +364,9 @@ HRESULT PMDActor::LoadPMDFile(const char* path)
 	std::vector<unsigned char>vertices(vertNum * pmdvertex_size); // バッファーの確保
 	fread(vertices.data(), vertices.size(), 1, fp);
 
-	unsigned int indicesNum = 0; // インデックス数
-	fread(&indicesNum, sizeof(indicesNum), 1, fp);
+	fread(&_indexNum, sizeof(_indexNum), 1, fp);
 
-	std::vector<unsigned short> indices(indicesNum);
+	std::vector<unsigned short> indices(_indexNum);
 	fread(indices.data(), indices.size() * sizeof(indices[0]), 1, fp);
 
 #pragma pack(1) // ここから1バイトパッキングとなり、アライメントは発生しない
@@ -1257,8 +1256,9 @@ void PMDActor::Update()
 	//_mappedTransform->world = XMMatrixRotationY(_angle);
 }
 
-void PMDActor::Draw()
+void PMDActor::Draw(bool isShadow)
 {
+
 	_dx12.CommandList()->IASetVertexBuffers(0, 1, &_vbView);
 	_dx12.CommandList()->IASetIndexBuffer(&_ibView);
 
@@ -1266,22 +1266,30 @@ void PMDActor::Draw()
 	_dx12.CommandList()->SetDescriptorHeaps(1, transheaps);
 	_dx12.CommandList()->SetGraphicsRootDescriptorTable(1, _transformHeap->GetGPUDescriptorHandleForHeapStart());
 
-	ID3D12DescriptorHeap* mdh[] = { _materialHeap.Get() };
-	_dx12.CommandList()->SetDescriptorHeaps(1, mdh);
-
-	auto materialH = _materialHeap->GetGPUDescriptorHandleForHeapStart(); // ヒープ先頭
-	unsigned int idxOffset = 0; // 最初はオフセットなし
-
-	auto cbvsrvIncSize = _dx12.Device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * 5;
-
-	for (auto& m : _materials)
+	if (isShadow)
 	{
-		_dx12.CommandList()->SetGraphicsRootDescriptorTable(2, materialH);
-		_dx12.CommandList()->DrawIndexedInstanced(m.indicesNum, 1, idxOffset, 0, 0);
+		_dx12.CommandList()->DrawIndexedInstanced(_indexNum, 1, 0, 0, 0);
+	}
 
-		// ヒープポインターとインデックスを次に進める
-		materialH.ptr += cbvsrvIncSize;
-		idxOffset += m.indicesNum;
+	else
+	{
+		ID3D12DescriptorHeap* mdh[] = { _materialHeap.Get() };
+		_dx12.CommandList()->SetDescriptorHeaps(1, mdh);
+
+		auto materialH = _materialHeap->GetGPUDescriptorHandleForHeapStart(); // ヒープ先頭
+		unsigned int idxOffset = 0; // 最初はオフセットなし
+
+		auto cbvsrvIncSize = _dx12.Device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * 5;
+
+		for (auto& m : _materials)
+		{
+			_dx12.CommandList()->SetGraphicsRootDescriptorTable(2, materialH);
+			_dx12.CommandList()->DrawIndexedInstanced(m.indicesNum, 2, idxOffset, 0, 0);
+
+			// ヒープポインターとインデックスを次に進める
+			materialH.ptr += cbvsrvIncSize;
+			idxOffset += m.indicesNum;
+		}
 	}
 }
 

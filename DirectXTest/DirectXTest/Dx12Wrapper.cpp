@@ -12,6 +12,8 @@ using namespace Microsoft::WRL;
 using namespace std;
 using namespace DirectX;
 
+constexpr uint32_t shadow_difinition = 1024;
+
 namespace {
 	// モデルのパスとテクスチャのパスから合成パスを得る
 	// @param modelPath アプリケーションから見たpmdモデルのパス
@@ -167,18 +169,8 @@ HRESULT Dx12Wrapper::CreateDepthStencilView()
 	auto result = _swapchain->GetDesc1(&desc);
 
 	// 深度バッファーの作成
-	D3D12_RESOURCE_DESC resdesc = {};
-	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; // 2次元のテクスチャデータ
-	resdesc.DepthOrArraySize = 1; // テクスチャ配列でも、3Dテクスチャでもない
-	resdesc.Width = desc.Width; // 幅と高さはレンダーターゲットと同じ
-	resdesc.Height = desc.Height; // 同上
-	resdesc.Format = DXGI_FORMAT_D32_FLOAT; // 深度値書き込む用フォーマット
-	resdesc.SampleDesc.Count = 1; // サンプルは1ピクセルあたり1つ
-	resdesc.SampleDesc.Quality = 0;
-	resdesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL; // デプスステンシルとして使用
-	resdesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	resdesc.MipLevels = 1;
-	resdesc.Alignment = 0;
+	D3D12_RESOURCE_DESC resdesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_TYPELESS, desc.Width, desc.Height);
+	resdesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
 	// 深度値用ヒーププロパティ
 	auto depthHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
@@ -201,8 +193,26 @@ HRESULT Dx12Wrapper::CreateDepthStencilView()
 		return result;
 	}
 
+	resdesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_TYPELESS, shadow_difinition, shadow_difinition);
+	resdesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+	result = _dev->CreateCommittedResource
+	(
+		&depthHeapProp,
+		D3D12_HEAP_FLAG_NONE,
+		&resdesc,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE, // 深度値書き込みに使用
+		&depthClearValue,
+		IID_PPV_ARGS(_lightDepthBuffer.ReleaseAndGetAddressOf())
+	);
+
+	if (FAILED(result)) {
+		// エラー処理
+		return result;
+	}
+
 	D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {}; // 深度に使うことがわかればよい
-	dsvHeapDesc.NumDescriptors = 1; // 深度ビューは1つ
+	dsvHeapDesc.NumDescriptors = 2; // 深度ビューは1つ
 	dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; // デプスステンシルビューとして使う
 	dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
@@ -214,12 +224,50 @@ HRESULT Dx12Wrapper::CreateDepthStencilView()
 	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D; // 2Dテクスチャ
 	dsvDesc.Flags = D3D12_DSV_FLAG_NONE; // フラグは特になし
 
+	auto handle = _dsvHeaps->GetCPUDescriptorHandleForHeapStart();
+
 	_dev->CreateDepthStencilView
 	(
 		_depthBuffer.Get(),
 		&dsvDesc,
-		_dsvHeaps->GetCPUDescriptorHandleForHeapStart()
+		handle
 	);
+
+	handle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
+	_dev->CreateDepthStencilView
+	(
+		_lightDepthBuffer.Get(),
+		&dsvDesc,
+		handle
+	);
+
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	heapDesc.NodeMask = 0;
+	heapDesc.NumDescriptors = 2;
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+	result = _dev->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&_depthSRVHeap));
+
+	if (FAILED(result)) {
+		// エラー処理
+		return result;
+	}
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC shaderResDesc = {};
+	shaderResDesc.Format = DXGI_FORMAT_R32_FLOAT;
+	shaderResDesc.Texture2D.MipLevels = 1;
+	shaderResDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	shaderResDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+
+	handle = _depthSRVHeap->GetCPUDescriptorHandleForHeapStart();
+
+	_dev->CreateShaderResourceView(_depthBuffer.Get(), &shaderResDesc, handle);
+
+	handle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	_dev->CreateShaderResourceView(_lightDepthBuffer.Get(), &shaderResDesc, handle);
 
 	return result;
 }
@@ -402,6 +450,17 @@ HRESULT Dx12Wrapper::CreateSceneView()
 		1000.0f // 遠いほう
 	);
 	_mappedSceneData->eye = eye;
+
+	XMFLOAT4 planeVec(0, 1, 0, 0); // 平面の方程式
+
+	auto light = XMFLOAT4(-1, 1, -1, 0);
+	auto lightVec = XMLoadFloat4(&light);
+	_mappedSceneData->shadow = XMMatrixShadow(XMLoadFloat4(&planeVec), lightVec);
+
+	auto lightPos = XMLoadFloat3(&target) + XMVector3Normalize(lightVec) * XMVector3Length(XMVectorSubtract(XMLoadFloat3(&target), XMLoadFloat3(&eye))).m128_f32[0];
+	_mappedSceneData->lightCamera =
+		XMMatrixLookAtLH(lightPos, XMLoadFloat3(&target), XMLoadFloat3(&up))
+		* XMMatrixOrthographicLH(40, 40, 1.0f, 100.0f);
 
 	D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc = {};
 	descHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -702,7 +761,7 @@ HRESULT Dx12Wrapper::CreatePeraResource()
 	cbvDesc.SizeInBytes = static_cast<UINT>(_bokehParamBuffer->GetDesc().Width);
 	_dev->CreateConstantBufferView(&cbvDesc, handle);
 
-	D3D12_DESCRIPTOR_RANGE range[3] = {};
+	D3D12_DESCRIPTOR_RANGE range[4] = {};
 	range[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // t
 	range[0].BaseShaderRegister = 0; // 0
 	range[0].NumDescriptors = 1;
@@ -715,7 +774,11 @@ HRESULT Dx12Wrapper::CreatePeraResource()
 	range[2].BaseShaderRegister = 1; // 1
 	range[2].NumDescriptors = 1;
 
-	D3D12_ROOT_PARAMETER rp[3] = {};
+	range[3].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // t
+	range[3].BaseShaderRegister = 2; // 1
+	range[3].NumDescriptors = 1;
+
+	D3D12_ROOT_PARAMETER rp[4] = {};
 	rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	rp[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 	rp[0].DescriptorTable.pDescriptorRanges = &range[0];
@@ -731,10 +794,15 @@ HRESULT Dx12Wrapper::CreatePeraResource()
 	rp[2].DescriptorTable.pDescriptorRanges = &range[2];
 	rp[2].DescriptorTable.NumDescriptorRanges = 1;
 
+	rp[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rp[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	rp[3].DescriptorTable.pDescriptorRanges = &range[3];
+	rp[3].DescriptorTable.NumDescriptorRanges = 1;
+
 	D3D12_STATIC_SAMPLER_DESC sampler = CD3DX12_STATIC_SAMPLER_DESC(0); // s0
 
 	CD3DX12_ROOT_SIGNATURE_DESC rsDesc = {};
-	rsDesc.NumParameters = 3;
+	rsDesc.NumParameters = 4;
 	rsDesc.pParameters = rp;
 	rsDesc.NumStaticSamplers = 1;
 	rsDesc.pStaticSamplers = &sampler;
@@ -1011,7 +1079,8 @@ bool Dx12Wrapper::CreateeffectBufferAndView()
 	return true;
 }
 
-Dx12Wrapper::Dx12Wrapper(HWND hwnd)
+Dx12Wrapper::Dx12Wrapper(HWND hwnd) :
+	_parallelLightVec(1, -1, 1)
 {
 #ifdef _DEBUG
 	// デバッグレイヤーをオンに
@@ -1105,7 +1174,6 @@ void Dx12Wrapper::PreDrawToPera1()
 
 void Dx12Wrapper::DrawToPera1()
 {
-	SetScene();
 
 	auto wsize = Application::Instance().GetWindowSize();
 
@@ -1167,6 +1235,9 @@ void Dx12Wrapper::Draw()
 
 	_cmdList->SetDescriptorHeaps(1, _effectSRVHeap.GetAddressOf());
 	_cmdList->SetGraphicsRootDescriptorTable(2, _effectSRVHeap->GetGPUDescriptorHandleForHeapStart());
+
+	_cmdList->SetDescriptorHeaps(1, _depthSRVHeap.GetAddressOf());
+	_cmdList->SetGraphicsRootDescriptorTable(3, _depthSRVHeap->GetGPUDescriptorHandleForHeapStart());
 
 	_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	_cmdList->IASetVertexBuffers(0, 1, &_peraVBV);
@@ -1249,6 +1320,34 @@ void Dx12Wrapper::DrawHorizontalBokeh()
 	
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(_peraResource2.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	_cmdList->ResourceBarrier(1, &barrier);
+}
+
+void Dx12Wrapper::SetupShadowPass()
+{
+	auto handle = _dsvHeaps->GetCPUDescriptorHandleForHeapStart();
+	handle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
+	_cmdList->ClearDepthStencilView(handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+	_cmdList->OMSetRenderTargets(0, nullptr, false, &handle);
+
+	D3D12_VIEWPORT vp = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<FLOAT>(shadow_difinition), static_cast<FLOAT>(shadow_difinition));
+	_cmdList->RSSetViewports(1, &vp);
+
+	CD3DX12_RECT rc(0, 0, shadow_difinition, shadow_difinition);
+	_cmdList->RSSetScissorRects(1, &rc);
+
+}
+
+void Dx12Wrapper::SetDepthSRV()
+{
+	_cmdList->SetDescriptorHeaps(1, _depthSRVHeap.GetAddressOf());
+
+	auto handle = _depthSRVHeap->GetGPUDescriptorHandleForHeapStart();
+
+	handle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	_cmdList->SetGraphicsRootDescriptorTable(3, handle);
 }
 
 

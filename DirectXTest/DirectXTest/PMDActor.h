@@ -141,6 +141,8 @@ class PMDActor
 	// インデックスからノードを検索しやすいように
 	std::vector<BoneNode*> _boneNodeAddressArray;
 
+	unsigned int _indexNum;
+
 	// 読み込んだマテリアルをもとにマテリアルバッファを作成
 	HRESULT CreateMaterialData();
 
@@ -202,6 +204,6 @@ public:
 	// クローンは頂点およびマテリアルは共通のバッファを見るようにする
 	PMDActor* Clone();
 	void Update();
-	void Draw();
+	void Draw(bool isShadow);
 	void PlayAnimation();
 };

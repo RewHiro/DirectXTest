@@ -50,16 +50,25 @@ class Dx12Wrapper
 	ComPtr<ID3D12DescriptorHeap> _effectSRVHeap;
 	ComPtr<ID3D12Resource> _effectTexBuffer;
 
+	// 深度値テクスチャ用
+	ComPtr<ID3D12DescriptorHeap> _depthSRVHeap;
+
+	// シャドウマップ用深度バッファー
+	ComPtr<ID3D12Resource> _lightDepthBuffer;
+
 	// シーンを構成するバッファまわり
 	ComPtr<ID3D12Resource> _sceneConstBuff = nullptr;
 
 	struct SceneData {
 		DirectX::XMMATRIX view; // ビュー行列
 		DirectX::XMMATRIX proj; // プロジェクション行列
+		DirectX::XMMATRIX lightCamera; //ライトから見たビュー
+		DirectX::XMMATRIX shadow; // 影
 		DirectX::XMFLOAT3 eye; // 視点座標
 	};
 	SceneData* _mappedSceneData;
 	ComPtr<ID3D12DescriptorHeap> _sceneDescHeap = nullptr;
+	DirectX::XMFLOAT3 _parallelLightVec;
 
 	// フェンス
 	ComPtr<ID3D12Fence> _fence = nullptr;
@@ -117,6 +126,8 @@ public:
 	void Draw();
 	void Flip();
 	void DrawHorizontalBokeh();
+	void SetupShadowPass();
+	void SetDepthSRV();
 
 	void BeginDraw();
 	void EndDraw();

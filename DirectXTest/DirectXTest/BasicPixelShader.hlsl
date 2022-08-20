@@ -3,6 +3,17 @@
 
 float4 BasicPS(Output input) : SV_TARGET
 {
+	if (input.instNo == 1)
+	{
+		return float4(0, 0, 0, 1);
+	}
+
+	float3 posFromLightVP = input.tpos.xyz / input.tpos.w;
+	float2 shadowUV = (posFromLightVP + float2(1, -1)) * float2(0.5f, -0.5f);
+	float depthFromLight = lightDepthTex.SampleCmp(shadowSmp, shadowUV, posFromLightVP.z - 0.005f);
+
+	float shadowWeight = lerp(0.5f,1.0f, depthFromLight);
+
 	// 光の向かうベクトル(平行光線)
 	float3 light = normalize(float3(1,-1,1));
 
@@ -24,7 +35,7 @@ float4 BasicPS(Output input) : SV_TARGET
 	// テクスチャカラー
 	float4 texColor = tex.Sample(smp, input.uv);
 
-	return max(
+	float4 ret = max(
 		toonDif // 輝度(トゥーン)
 		* diffuse // ディフューズ色
 		* texColor // テクスチャカラー
@@ -32,6 +43,8 @@ float4 BasicPS(Output input) : SV_TARGET
 		+ spa.Sample(smp, sphereMapUV) * texColor // スフィアマップ(加算)
 		+ float4(specularB * specular.rgb, 1) // スペキュラ
 		, float4(ambient * texColor.rgb, 1)); // アンビエント
+
+	return float4(ret.rgb * shadowWeight, ret.a);
 
 	//return float4(brightness, brightness, brightness, 1) // 輝度
 	//	* diffuse  // ディフューズ色

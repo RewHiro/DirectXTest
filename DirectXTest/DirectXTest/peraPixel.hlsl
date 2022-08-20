@@ -2,12 +2,18 @@
 
 float4 main(Output input) : SV_TARGET
 {
-	float2 nmTex = effectTex.Sample(smp,input.uv).xy;
-	nmTex = nmTex * 2.0f - 1.0f;
-	return tex.Sample(smp, input.uv + nmTex * 0.1f);
+	//float dep = pow(depthTex.Sample(smp,input.uv), 20); // 20èÊÇ∑ÇÈ
+	//return float4(dep, dep, dep, 1);
+
+
+	return tex.Sample(smp, input.uv);
+
+	//float2 nmTex = effectTex.Sample(smp,input.uv).xy;
+	//nmTex = nmTex * 2.0f - 1.0f;
+	//return tex.Sample(smp, input.uv + nmTex * 0.1f);
 
 	//float dx = 1.0f / 1280.0f;
-	//float4 ret = float4(0, 0, 0, 0);
+	float4 ret = float4(0, 0, 0, 0);
 	//float4 col = tex.Sample(smp, input.uv);
 
 	//ret += bkweights[0] * col;
@@ -20,8 +26,8 @@ float4 main(Output input) : SV_TARGET
 
 	//return float4(ret.rgb, col.a);
 
-	//float dx = 1.0f / 1280.0f;
-	//float dy = 1.0f / 720.0f;
+	float dx = 1.0f / 1280.0f;
+	float dy = 1.0f / 720.0f;
 
 	//float dx = 2.0f / 1280.0f;
 	//float dy = 2.0f / 720.0f;

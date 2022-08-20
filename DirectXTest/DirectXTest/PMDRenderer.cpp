@@ -208,29 +208,75 @@ HRESULT PMDRenderer::CreateGraphicsPipelineForPMD()
 		assert(SUCCEEDED(result));
 	}
 
+	result = D3DCompileFromFile
+	(
+		L"BasicVertexShader.hlsl", // シェーダー名
+		nullptr, // defineはなし
+		D3D_COMPILE_STANDARD_FILE_INCLUDE, // インクルードはデフォルト
+		"shadowVS", "vs_5_0", // 関数はshadowVS、対象シェーダーはvs_5_0
+		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, // デバッグ用および最適化はなし
+		0,
+		vsBlob.ReleaseAndGetAddressOf(), errorBlob.ReleaseAndGetAddressOf() // エラー時はerrorBlobにメッセージが入る
+	);
+
+	if (!CheckShaderCompileResult(result, errorBlob.Get()))
+	{
+		assert(0);
+		return result;
+	}
+
+	gpipeline.VS = CD3DX12_SHADER_BYTECODE(vsBlob.Get()); // 頂点シェーダー設定
+	gpipeline.PS.BytecodeLength = 0; // ピクセルシェーダー必要なし
+	gpipeline.PS.pShaderBytecode = nullptr; // ピクセルシェーダー必要なし
+	gpipeline.NumRenderTargets = 0; // レンダーターゲット必要なし
+	gpipeline.RTVFormats[0] = DXGI_FORMAT_UNKNOWN; // レンダーターゲット必要なし
+
+	result = _dx12.Device()->CreateGraphicsPipelineState(&gpipeline, IID_PPV_ARGS(_plsShadow.ReleaseAndGetAddressOf()));
+
+	if (FAILED(result)) {
+		// エラー処理
+		assert(SUCCEEDED(result));
+	}
+
+
 	return result;
 }
 
 HRESULT PMDRenderer::CreateRootSignature()
 {
-	CD3DX12_DESCRIPTOR_RANGE descTblRange[4] = {}; // テクスチャと定数の2つ
+	CD3DX12_DESCRIPTOR_RANGE descTblRange[5] = {}; // テクスチャと定数の2つ
 	descTblRange[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);  // 定数[b0](ビュープロジェクション用)
 	descTblRange[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);  // 定数[b1](ワールド、ボーン用)
 	descTblRange[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2);  // 定数[b2](マテリアル用)
 	descTblRange[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, 0);  // テクスチャ4つ
+	descTblRange[4].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4);
 
-	CD3DX12_ROOT_PARAMETER rootparam[3] = {};
+
+	CD3DX12_ROOT_PARAMETER rootparam[4] = {};
 
 	rootparam[0].InitAsDescriptorTable(1, &descTblRange[0]); // ビュープロジェクション変換
 	rootparam[1].InitAsDescriptorTable(1, &descTblRange[1]); // ワールド・ボーン変換
 	rootparam[2].InitAsDescriptorTable(2, &descTblRange[2]); // マテリアル周り
+	rootparam[3].InitAsDescriptorTable(1, &descTblRange[4]);
 
-	CD3DX12_STATIC_SAMPLER_DESC samplerDesc[2] = {};
+
+	CD3DX12_STATIC_SAMPLER_DESC samplerDesc[3] = {};
 	samplerDesc[0].Init(0);
 	samplerDesc[1].Init(1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
 
+	samplerDesc[2].Init
+	(
+		2
+		,D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR
+		,D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		,D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		,D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		,0.0f
+		,1
+	);
+
 	CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
-	rootSignatureDesc.Init(3, rootparam, 2, samplerDesc, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	rootSignatureDesc.Init(4, rootparam, 3, samplerDesc, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ComPtr<ID3DBlob> rootSigBlob = nullptr;
 	ComPtr<ID3DBlob> errorBlob = nullptr;
@@ -305,13 +351,25 @@ void PMDRenderer::BeforeDraw()
 {
 	auto cmdlist = _dx12.CommandList();
 	cmdlist->SetPipelineState(_pipeline.Get());
-	cmdlist->SetGraphicsRootSignature(_rootSignature.Get());
-	cmdlist->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
 void PMDRenderer::Draw()
 {
 
+}
+
+void PMDRenderer::SetupRootSignature()
+{
+	auto cmdlist = _dx12.CommandList();
+	cmdlist->SetGraphicsRootSignature(_rootSignature.Get());
+	cmdlist->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+}
+
+void PMDRenderer::SetupShadowPass()
+{
+	auto cmdlist = _dx12.CommandList();
+	cmdlist->SetPipelineState(_plsShadow.Get());
 }
 
 ID3D12PipelineState* PMDRenderer::GetPipelineState()
