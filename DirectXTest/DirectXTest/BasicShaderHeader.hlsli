@@ -50,4 +50,5 @@ struct PixelOutput
 {
 	float4 col : SV_TARGET0; // カラー値を出力
 	float4 normal : SV_TARGET1; // 法線を出力
+	float4 highLum : SV_TARGET2; // 高輝度(High Luminance)
 };

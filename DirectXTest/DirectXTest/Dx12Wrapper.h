@@ -49,6 +49,8 @@ class Dx12Wrapper
 	ComPtr<ID3D12Resource> _peraResource2;
 	ComPtr<ID3D12PipelineState> _pipeline2 = nullptr; // パイプライン
 
+	std::array<ComPtr<ID3D12Resource>, 2> _bloomBuffer; // ブルーム用バッファー
+
 	// 歪みテクスチャ用
 	ComPtr<ID3D12DescriptorHeap> _effectSRVHeap;
 	ComPtr<ID3D12Resource> _effectTexBuffer;

@@ -8,6 +8,7 @@ PixelOutput BasicPS(Output input)
 		PixelOutput output;
 		output.col = float4(0,0,0,1);
 		output.normal = float4(0, 0, 0, 1);
+		output.highLum = float4(0, 0, 0, 1);
 		return output;
 	}
 
@@ -29,6 +30,7 @@ PixelOutput BasicPS(Output input)
 
 	// 光の反射ベクトル
 	float3 refLight = normalize(reflect(light, input.normal.xyz));
+	
 	float specularB = pow(saturate(dot(refLight, -input.ray)), specular.a);
 
 	// スフィアマップ用uv
@@ -51,6 +53,9 @@ PixelOutput BasicPS(Output input)
 	output.col = float4(ret.rgb * shadowWeight, ret.a);
 	output.normal.rgb = float3((input.normal.xyz + 1.0f) / 2.0f);
 	output.normal.a = 1;
+
+	float y = dot(float3(0.299f, 0.587f, 0.114f), output.col);
+	output.highLum = y > 0.99f ? output.col : 0.0f;
 	return output;
 
 	//return float4(brightness, brightness, brightness, 1) // 輝度
