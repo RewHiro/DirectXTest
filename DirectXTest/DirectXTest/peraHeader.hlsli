@@ -1,6 +1,7 @@
 Texture2D<float4> tex : register(t0); // 通常テクスチャ
-Texture2D<float4> effectTex : register(t1);
-Texture2D<float> depthTex : register(t2); // デプス
+Texture2D<float4> texNormal : register(t1); // 法線
+Texture2D<float4> effectTex : register(t2);
+Texture2D<float> depthTex : register(t3); // デプス
 
 
 SamplerState smp : register(s0); // サンプラー

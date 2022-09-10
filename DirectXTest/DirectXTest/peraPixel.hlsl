@@ -5,6 +5,16 @@ float4 main(Output input) : SV_TARGET
 	//float dep = pow(depthTex.Sample(smp,input.uv), 20); // 20æ‚·‚é
 	//return float4(dep, dep, dep, 1);
 
+	if (input.uv.x < 0.2 && input.uv.y < 0.2)
+	{
+		float depth = depthTex.Sample(smp, input.uv * 5);
+		depth = 1.0f - pow(depth, 30);
+		return float4(depth, depth, depth, 1);
+	}
+	else if (input.uv.x < 0.2 && input.uv.y < 0.6)
+	{
+		return texNormal.Sample(smp, (input.uv - float2(0, 0.4)) * 5);
+	}
 
 	return tex.Sample(smp, input.uv);
 

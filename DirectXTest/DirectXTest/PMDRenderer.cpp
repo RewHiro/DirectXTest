@@ -194,9 +194,10 @@ HRESULT PMDRenderer::CreateGraphicsPipelineForPMD()
 	// 三角形で構成
 	gpipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
-	gpipeline.NumRenderTargets = 1; // 今は1つのみ
+	gpipeline.NumRenderTargets = 2; // 今は1つのみ
 
 	gpipeline.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; // 0～1に正規化されたRGBA
+	gpipeline.RTVFormats[1] = DXGI_FORMAT_R8G8B8A8_UNORM; // 0～1に正規化されたRGBA
 
 	gpipeline.SampleDesc.Count = 1; // サンプリングは1ピクセルにつき
 	gpipeline.SampleDesc.Quality = 0; // クオリティは最低
@@ -230,6 +231,7 @@ HRESULT PMDRenderer::CreateGraphicsPipelineForPMD()
 	gpipeline.PS.pShaderBytecode = nullptr; // ピクセルシェーダー必要なし
 	gpipeline.NumRenderTargets = 0; // レンダーターゲット必要なし
 	gpipeline.RTVFormats[0] = DXGI_FORMAT_UNKNOWN; // レンダーターゲット必要なし
+	gpipeline.RTVFormats[1] = DXGI_FORMAT_UNKNOWN; // レンダーターゲット必要なし
 
 	result = _dx12.Device()->CreateGraphicsPipelineState(&gpipeline, IID_PPV_ARGS(_plsShadow.ReleaseAndGetAddressOf()));
 

@@ -1,11 +1,14 @@
 #include "BasicShaderHeader.hlsli"
 
 
-float4 BasicPS(Output input) : SV_TARGET
+PixelOutput BasicPS(Output input)
 {
 	if (input.instNo == 1)
 	{
-		return float4(0, 0, 0, 1);
+		PixelOutput output;
+		output.col = float4(0,0,0,1);
+		output.normal = float4(0, 0, 0, 1);
+		return output;
 	}
 
 	float3 posFromLightVP = input.tpos.xyz / input.tpos.w;
@@ -44,7 +47,11 @@ float4 BasicPS(Output input) : SV_TARGET
 		+ float4(specularB * specular.rgb, 1) // スペキュラ
 		, float4(ambient * texColor.rgb, 1)); // アンビエント
 
-	return float4(ret.rgb * shadowWeight, ret.a);
+	PixelOutput output;
+	output.col = float4(ret.rgb * shadowWeight, ret.a);
+	output.normal.rgb = float3((input.normal.xyz + 1.0f) / 2.0f);
+	output.normal.a = 1;
+	return output;
 
 	//return float4(brightness, brightness, brightness, 1) // 輝度
 	//	* diffuse  // ディフューズ色

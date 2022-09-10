@@ -8,6 +8,7 @@
 #include <wrl.h>
 #include <string>
 #include <functional>
+#include <array>
 
 class Dx12Wrapper
 {
@@ -33,7 +34,9 @@ class Dx12Wrapper
 	std::unique_ptr<D3D12_VIEWPORT> _viewport; // ビューポート
 	std::unique_ptr<D3D12_RECT> _scissorrect; // シザー矩形
 
-	ComPtr<ID3D12Resource> _peraResource;
+	//ComPtr<ID3D12Resource> _peraResource;
+	std::array<ComPtr<ID3D12Resource>, 2> _peraResources;
+
 	ComPtr<ID3D12DescriptorHeap> _peraRTVHeap; // レンダーターゲット用
 	ComPtr<ID3D12DescriptorHeap> _peraSRVHeap; // テクスチャ用
 	ComPtr<ID3D12Resource> _peraVB;
