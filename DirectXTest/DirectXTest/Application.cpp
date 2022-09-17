@@ -67,7 +67,11 @@ bool Application::Init()
 	// DirectX12ラッパー生成&初期化
 	_dx12.reset(new Dx12Wrapper(_hwnd));
 	_pmdRenderer.reset(new PMDRenderer(*_dx12));
-	_pmdActor.reset(new PMDActor("Model/鏡音リン.pmd", "Motion/swing.vmd", *_pmdRenderer));
+	_pmdActor.reset(new PMDActor("Model/鏡音リン.pmd", "Motion/swing.vmd", *_pmdRenderer, DirectX::XMFLOAT3{0.0f,0.0f,0.0f}));
+
+
+	_pmdActor2.reset(new PMDActor("Model/初音ミク.pmd", "Motion/swing.vmd", *_pmdRenderer, DirectX::XMFLOAT3{ 20.0f,0.0f,20.0f }));
+	
 
 	return true;
 }
@@ -80,6 +84,7 @@ void Application::Run()
 	unsigned int frame = 0;
 
 	_pmdActor->PlayAnimation();
+	_pmdActor2->PlayAnimation();
 
 	while (true)
 	{
@@ -96,6 +101,7 @@ void Application::Run()
 		}
 
 		_pmdActor->Update();
+		_pmdActor2->Update();
 
 		_pmdRenderer->SetupRootSignature();
 
@@ -103,6 +109,7 @@ void Application::Run()
 		_pmdRenderer->SetupShadowPass();
 		_dx12->SetScene();
 		_pmdActor->Draw(true);
+		_pmdActor2->Draw(true);
 
 		_dx12->PreDrawToPera1();
 		_pmdRenderer->BeforeDraw();
@@ -110,6 +117,7 @@ void Application::Run()
 		_dx12->SetDepthSRV();
 		_dx12->SetScene();
 		_pmdActor->Draw(false);
+		_pmdActor2->Draw(false);
 		//_pmdRenderer->Draw();
 		_dx12->PostDrawToPera1();
 

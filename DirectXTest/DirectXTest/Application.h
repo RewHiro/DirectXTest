@@ -27,6 +27,9 @@ class Application
 	std::shared_ptr<PMDRenderer> _pmdRenderer;
 	std::shared_ptr<PMDActor> _pmdActor;
 
+	std::shared_ptr<PMDActor> _pmdActor2;
+
+
 	// ゲーム用ウィンドウの生成
 	void CreateGameWindow(HWND& hwnd, WNDCLASSEX& windowClass);
 

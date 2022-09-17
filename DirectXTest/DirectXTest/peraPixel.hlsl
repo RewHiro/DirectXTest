@@ -65,11 +65,11 @@ float4 main(Output input) : SV_TARGET
 	}
 	else if (input.uv.x < 0.2 && input.uv.y < 0.4)
 	{
-		return texLum.Sample(smp, (input.uv - float2(0, 0.2)) * 5);
+		return texShrinkHighLum.Sample(smp, (input.uv - float2(0, 0.2)) * 5);
 	}
 	else if (input.uv.x < 0.2 && input.uv.y < 0.6)
 	{
-		return texShrinkHighLum.Sample(smp, (input.uv - float2(0, 0.4)) * 5);
+		return dof.Sample(smp, (input.uv - float2(0, 0.4)) * 5);
 	}
 
 	float w, h, miplevels;
@@ -92,6 +92,44 @@ float4 main(Output input) : SV_TARGET
 
 	uvSize = float2(1, 0.5);
 	uvOfst = float2(0, 0);
+
+	// 画面の真ん中からの深度の差を測る
+	float depthDiff = abs(depthTex.Sample(smp, float2(0.5f, 0.5f)) - depthTex.Sample(smp, input.uv));
+	depthDiff = pow(depthDiff, 0.4f);
+	float t = depthDiff * 8;
+	float no;
+	t = modf(t, no);
+
+	float4 retColor[2];
+
+	retColor[0] = tex.Sample(smp, input.uv); // 通常テクスチャ
+	if (no == 0.0f)
+	{
+		retColor[1] = Get5x5GaussianBlur(dof, smp, input.uv * uvSize + uvOfst, dx, dy, float4(uvOfst, uvOfst + uvSize));
+	}
+	else
+	{
+		for (int i = 1; i <= 8; ++i)
+		{
+			if (i - no < 0)
+			{
+				continue;
+			}
+
+			retColor[i - no] = Get5x5GaussianBlur(dof, smp, input.uv * uvSize + uvOfst, dx, dy, float4(uvOfst, uvOfst + uvSize));
+			uvOfst.y += uvSize.y;
+			uvSize *= 0.5f;
+
+			if (i - no >= 1)
+			{
+				break;
+			}
+		}
+	}
+
+	//return retColor[0];
+
+	return lerp(retColor[0], retColor[1], t);
 
 	//return tex.Sample(smp, input.uv);
 
@@ -230,7 +268,7 @@ float4 VerticalBokehPS(Output input) : SV_TARGET
 	return float4(ret.rgb, col.a);
 }
 
-float4 BlurPS(Output input) : SV_TARGET
+BlurOutput BlurPS(Output input)
 {
 	float w, h, miplevels;
 	tex.GetDimensions(0, w, h, miplevels);
@@ -238,9 +276,13 @@ float4 BlurPS(Output input) : SV_TARGET
 	float2 uvSize = float2(1, 0.5);
 	float2 uvOfst = float2(0, 0);
 
-	//return tex.Sample(smp, input.uv);
+	float dx = 1.0f / w;
+	float dy = 1.0f / h;
 
-	//return float4(1, 0, 0, 1);
+	BlurOutput output;
 
-	return Get5x5GaussianBlur(tex, smp, input.uv, 1.0f / w, 1.0 / h, float4(uvOfst, uvOfst + uvSize));
+	output.col = Get5x5GaussianBlur(tex, smp, input.uv, dx, dy, float4(0, 0, 1, 1));
+	output.highLum = Get5x5GaussianBlur(texLum, smp, input.uv, dx, dy, float4(0, 0, 1, 1));
+
+	return output;
 }

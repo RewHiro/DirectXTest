@@ -52,6 +52,8 @@ class Dx12Wrapper
 	std::array<ComPtr<ID3D12Resource>, 2> _bloomBuffer; // ブルーム用バッファー
 	ComPtr<ID3D12PipelineState> _blurPipeline = nullptr;
 
+	ComPtr<ID3D12Resource> _dofBuffer;; // 被写界深度用ぼかしバッファー
+
 	// 歪みテクスチャ用
 	ComPtr<ID3D12DescriptorHeap> _effectSRVHeap;
 	ComPtr<ID3D12Resource> _effectTexBuffer;

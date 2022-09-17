@@ -1227,12 +1227,12 @@ DirectX::XMMATRIX PMDActor::LookAtMatrix(const DirectX::XMVECTOR& origin, const 
 		;
 }
 
-PMDActor::PMDActor(const char* filepath, const char* vmdFilePath, PMDRenderer& renderer):
+PMDActor::PMDActor(const char* filepath, const char* vmdFilePath, PMDRenderer& renderer, const DirectX::XMFLOAT3& pos):
 	_renderer(renderer)
 	, _dx12(renderer._dx12)
 	, _angle(0.0f)
 {
-	_transform.world = XMMatrixIdentity();
+	_transform.world = XMMatrixTranslationFromVector(XMLoadFloat3(&pos));
 	LoadPMDFile(filepath);
 	LoadVMDFile(vmdFilePath);
 	CreateTransformView();

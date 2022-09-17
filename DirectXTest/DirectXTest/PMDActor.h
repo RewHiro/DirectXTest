@@ -198,7 +198,7 @@ class PMDActor
 	DWORD _duration;
 
 public:
-	PMDActor(const char* filepath, const char* vmdFilePath, PMDRenderer& renderer);
+	PMDActor(const char* filepath, const char* vmdFilePath, PMDRenderer& renderer, const DirectX::XMFLOAT3& pos);
 	~PMDActor();
 
 	// クローンは頂点およびマテリアルは共通のバッファを見るようにする
