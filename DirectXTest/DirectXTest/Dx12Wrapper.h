@@ -50,6 +50,7 @@ class Dx12Wrapper
 	ComPtr<ID3D12PipelineState> _pipeline2 = nullptr; // パイプライン
 
 	std::array<ComPtr<ID3D12Resource>, 2> _bloomBuffer; // ブルーム用バッファー
+	ComPtr<ID3D12PipelineState> _blurPipeline = nullptr;
 
 	// 歪みテクスチャ用
 	ComPtr<ID3D12DescriptorHeap> _effectSRVHeap;
@@ -131,6 +132,7 @@ public:
 	void Draw();
 	void Flip();
 	void DrawHorizontalBokeh();
+	void DrawShrinkTextureForBlur();
 	void SetupShadowPass();
 	void SetDepthSRV();
 

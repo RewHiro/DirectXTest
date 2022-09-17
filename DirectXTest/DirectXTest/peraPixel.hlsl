@@ -57,24 +57,45 @@ float4 main(Output input) : SV_TARGET
 	//float dep = pow(depthTex.Sample(smp,input.uv), 20); // 20æ‚·‚é
 	//return float4(dep, dep, dep, 1);
 
-	//if (input.uv.x < 0.2 && input.uv.y < 0.2)
-	//{
-	//	float depth = depthTex.Sample(smp, input.uv * 5);
-	//	depth = 1.0f - pow(depth, 30);
-	//	return float4(depth, depth, depth, 1);
-	//}
-	//else if (input.uv.x < 0.2 && input.uv.y < 0.6)
-	//{
-	//	return texNormal.Sample(smp, (input.uv - float2(0, 0.4)) * 5);
-	//}
+	if (input.uv.x < 0.2 && input.uv.y < 0.2)
+	{
+		float depth = depthTex.Sample(smp, input.uv * 5);
+		depth = 1.0f - pow(depth, 30);
+		return float4(depth, depth, depth, 1);
+	}
+	else if (input.uv.x < 0.2 && input.uv.y < 0.4)
+	{
+		return texLum.Sample(smp, (input.uv - float2(0, 0.2)) * 5);
+	}
+	else if (input.uv.x < 0.2 && input.uv.y < 0.6)
+	{
+		return texShrinkHighLum.Sample(smp, (input.uv - float2(0, 0.4)) * 5);
+	}
 
-	float dx = 1.0f / 1280.0f;
-	float dy = 1.0f / 720.0f;
+	float w, h, miplevels;
+	tex.GetDimensions(0, w, h, miplevels);
+
+	float dx = 1.0f / w;
+	float dy = 1.0f / h;
 
 	float2 uvSize = float2(1, 0.5);
 	float2 uvOfst = float2(0, 0);
 
-	return tex.Sample(smp, input.uv) + Get5x5GaussianBlur(texLum, smp, input.uv, dx, dy, float4(uvOfst, uvOfst + uvSize));
+	float4 bloomAccum = float4(0, 0, 0, 0);
+
+	for (int i = 0; i < 8; i++)
+	{
+		bloomAccum += Get5x5GaussianBlur(texShrinkHighLum, smp, input.uv * uvSize + uvOfst, dx, dy, float4(uvOfst, uvOfst + uvSize));
+		uvOfst.y += uvSize.y;
+		uvSize *= 0.5f;
+	}
+
+	uvSize = float2(1, 0.5);
+	uvOfst = float2(0, 0);
+
+	//return tex.Sample(smp, input.uv);
+
+	return tex.Sample(smp, input.uv) + Get5x5GaussianBlur(texLum, smp, input.uv, dx, dy, float4(uvOfst, uvOfst + uvSize)) + saturate(bloomAccum);
 
 	//float2 nmTex = effectTex.Sample(smp,input.uv).xy;
 	//nmTex = nmTex * 2.0f - 1.0f;
@@ -207,4 +228,19 @@ float4 VerticalBokehPS(Output input) : SV_TARGET
 	}
 
 	return float4(ret.rgb, col.a);
+}
+
+float4 BlurPS(Output input) : SV_TARGET
+{
+	float w, h, miplevels;
+	tex.GetDimensions(0, w, h, miplevels);
+
+	float2 uvSize = float2(1, 0.5);
+	float2 uvOfst = float2(0, 0);
+
+	//return tex.Sample(smp, input.uv);
+
+	//return float4(1, 0, 0, 1);
+
+	return Get5x5GaussianBlur(tex, smp, input.uv, 1.0f / w, 1.0 / h, float4(uvOfst, uvOfst + uvSize));
 }
