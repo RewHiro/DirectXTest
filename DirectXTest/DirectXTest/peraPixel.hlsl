@@ -71,6 +71,11 @@ float4 main(Output input) : SV_TARGET
 	{
 		return dof.Sample(smp, (input.uv - float2(0, 0.4)) * 5);
 	}
+	else if (input.uv.x < 0.2 && input.uv.y < 0.8)
+	{
+		float s = texSSAO.Sample(smp, (input.uv - float2(0, 0.6)) * 5);
+		return float4(s, s, s, 1);
+	}
 
 	float w, h, miplevels;
 	tex.GetDimensions(0, w, h, miplevels);
@@ -103,6 +108,11 @@ float4 main(Output input) : SV_TARGET
 	float4 retColor[2];
 
 	retColor[0] = tex.Sample(smp, input.uv); // 通常テクスチャ
+
+	float4 ao = texSSAO.Sample(smp, input.uv);
+
+	retColor[0].xyz *= ao.xyz;
+
 	if (no == 0.0f)
 	{
 		retColor[1] = Get5x5GaussianBlur(dof, smp, input.uv * uvSize + uvOfst, dx, dy, float4(uvOfst, uvOfst + uvSize));

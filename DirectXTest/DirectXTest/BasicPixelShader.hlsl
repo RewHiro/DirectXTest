@@ -66,3 +66,8 @@ PixelOutput BasicPS(Output input)
 	//	+ float4(color * ambient, 1) // アンビエント
 	//	;
 }
+
+float SsaoPs(Output input) : SV_Target
+{
+	return 1.0f;
+}

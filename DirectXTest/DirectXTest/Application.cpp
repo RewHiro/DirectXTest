@@ -119,11 +119,16 @@ void Application::Run()
 		_pmdActor->Draw(false);
 		_pmdActor2->Draw(false);
 		//_pmdRenderer->Draw();
+
 		_dx12->PostDrawToPera1();
 
 		//_dx12->DrawHorizontalBokeh();
 
+
+
 		_dx12->DrawShrinkTextureForBlur();
+
+		_dx12->DrawAmbinetOcclusion();
 
 		_dx12->Clear();
 		_dx12->Draw();

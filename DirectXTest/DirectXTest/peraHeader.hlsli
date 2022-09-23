@@ -5,6 +5,7 @@ Texture2D<float4> texShrinkHighLum : register(t3); // 縮小バッファー高輝度
 Texture2D<float4> dof : register(t4); // 
 Texture2D<float4> effectTex : register(t5);
 Texture2D<float> depthTex : register(t6); // デプス
+Texture2D<float> texSSAO : register(t7); // SSAO
 
 
 SamplerState smp : register(s0); // サンプラー

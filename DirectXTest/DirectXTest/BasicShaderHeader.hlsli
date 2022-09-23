@@ -22,10 +22,14 @@ Texture2D<float4> spa : register(t2); // 2番スロットに設定されたテクスチャ
 Texture2D<float4> toon : register(t3); // 3番スロットに設定されたテクスチャ(トゥーン)
 Texture2D<float4> lightDepthTex : register(t4); // 4番スロットに設定されたテクスチャ
 
+Texture2D<float4> normtex : register(t5);
+Texture2D<float4> depthtex : register(t6);
+
 cbuffer SceneData : register(b0) // 定数バッファー
 {
 	matrix view; // ビュー行列
 	matrix proj; // プロジェクション行列
+	matrix invproj; // 逆プロジェクション行列
 	matrix lightCamera; // ライトビュープロジェクション
 	matrix shadow; // 影
 	float3 eye; // 視点

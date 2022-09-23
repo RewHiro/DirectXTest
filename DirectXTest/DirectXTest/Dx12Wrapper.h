@@ -54,6 +54,11 @@ class Dx12Wrapper
 
 	ComPtr<ID3D12Resource> _dofBuffer;; // 被写界深度用ぼかしバッファー
 
+	ComPtr<ID3D12Resource> _aoBuffer;
+	ComPtr<ID3D12PipelineState> _aoPipeline = nullptr;
+	ComPtr<ID3D12DescriptorHeap> _aoRTVDH;
+	ComPtr<ID3D12DescriptorHeap> _aoSRVDH;
+
 	// 歪みテクスチャ用
 	ComPtr<ID3D12DescriptorHeap> _effectSRVHeap;
 	ComPtr<ID3D12Resource> _effectTexBuffer;
@@ -70,6 +75,7 @@ class Dx12Wrapper
 	struct SceneData {
 		DirectX::XMMATRIX view; // ビュー行列
 		DirectX::XMMATRIX proj; // プロジェクション行列
+		DirectX::XMMATRIX invProj; // 逆プロジェクション行列
 		DirectX::XMMATRIX lightCamera; //ライトから見たビュー
 		DirectX::XMMATRIX shadow; // 影
 		DirectX::XMFLOAT3 eye; // 視点座標
@@ -120,6 +126,10 @@ class Dx12Wrapper
 
 	bool CreateeffectBufferAndView();
 
+	bool CreateAmbientOcclusionBuffer();
+	bool CreateAmbientOcclusionDescriptorHeap();
+	bool CreateAmbientOcclusionPipeline();
+
 public:
 	Dx12Wrapper(HWND hwnd);
 	~Dx12Wrapper();
@@ -135,6 +145,7 @@ public:
 	void Flip();
 	void DrawHorizontalBokeh();
 	void DrawShrinkTextureForBlur();
+	void DrawAmbinetOcclusion();
 	void SetupShadowPass();
 	void SetDepthSRV();
 
